@@ -12,7 +12,10 @@
 
 #include <android/log.h>
 #include <android/native_window.h>
+#include <android/native_activity.h>
+#include <android/configuration.h>
 #include <android/asset_manager.h>
+#include <android/sensor.h>
 
 #include <GLES3/gl3.h>
 #include <EGL/egl.h>
@@ -66,8 +69,12 @@ typedef struct {
 
 // 封装的上下文结构体
 struct ESContext {
-    // 平台特殊数据
-    void *platformData;
+    // 用于存放android_app对象
+    ANativeActivity* activity;
+    // 暂存的数据，类似onRestoreInstanceState 返回的值
+    void* savedState;
+    // 用户配置
+    AConfiguration* config;
     // 用户数据
     void *userData;
     // 宽
@@ -85,13 +92,23 @@ struct ESContext {
 
     EGLSurface eglSurface;
 
+    /// 动画
+    // 是否允许动画
+    volatile bool animate;
+
+    /// 传感器
+    // 传感器管理器
+    ASensorManager* sensorManager;
+    // 传感器事件队列
+    ASensorEventQueue* sensorEventQueue;
+    // 加速度传感器
+    const ASensor* accelerometerSensor;
+
     /// 各个生命周期回调方法
     // 绘制回调
     void (*drawFunc)(ESContext *esContext);
     // 关闭回调
     void (*shutdownFunc)(ESContext *esContext);
-    // 按键输入回调
-    void (*keyFunc)(ESContext *esContext, unsigned char, int, int);
     // 更新回调
     void (*updateFunc)(ESContext *esContext, float deltaTime);
     // 窗口发生改变时的回调
@@ -109,10 +126,15 @@ struct ESContext {
     // 各个生命周期回调
     void (*onStart)(ESContext* esContext);
     void (*onResume)(ESContext* esContext);
-    void (*onSavedInstance)(ESContext* esContext);
+    void (*onSavedInstance)(ESContext* esContext, struct android_app* app);
     void (*onPause)(ESContext* esContext);
     void (*onStop)(ESContext* esContext);
     void (*onDestroy)(ESContext* esContext);
+    // 事件回调
+    int32_t (*onTouchEvent)(ESContext* esContext, AInputEvent* event);
+    int32_t (*onKeyEvent)(ESContext* esContext, AInputEvent* event);
+    // 动画回调
+    void (*onAnimate)(ESContext* esContext);
 };
 
 
@@ -126,8 +148,6 @@ void registerShutdownFunc(ESContext *esContext, void (*shutdownFunc)(ESContext *
 
 void registerUpdateFunc(ESContext *esContext, void(*updateFunc)(ESContext *, float));
 
-void registerKeyFunc(ESContext *esContext, void(*keyFunc)(ESContext*, unsigned char, int, int));
-
 void registerWindowChange(ESContext *esContext, void(*onWindowResize)(ESContext*, int, int));
 
 /**
@@ -140,6 +160,13 @@ void registerWindowChange(ESContext *esContext, void(*onWindowResize)(ESContext*
  */
 char* loadTGA(void* context, const char *fileName, int *width, int *height);
 
+/**
+ * 读取assets文件夹中的文件
+ * @param file assets目录下的文件名(包含路径)
+ * @param manager AssetManager管理器
+ * @return 返回字符串
+ */
+char* readAssetFile(const char* file, AAssetManager* manager);
 
 /**
  * 打开文件
@@ -170,6 +197,11 @@ GLuint loadShader(GLenum type, const char* shaderSrc);
 
 GLuint loadProgram(const char* vertexShader, const char* fragShader);
 
+/**
+ * 查询活动的统一变量uniform
+ * @param program
+ */
+void checkActiveUniform(GLuint program);
 
 /// transform
 /**

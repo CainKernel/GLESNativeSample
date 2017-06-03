@@ -15,22 +15,33 @@ int EGLInit(ESContext *esContext) {
 
     char vertexShader[] =
             "#version 300 es\n"
-                    "layout(location = 0) in vec4 vPosition;\n"
+                    "layout(location = 0) in vec4 a_position;\n"
+                    "layout(location = 1) in vec4 a_color;\n"
+                    "out vec4 v_color;"
                     "void main()\n"
                     "{\n"
-                    "   gl_Position = vPosition;\n"
+                    "   gl_Position = a_position;\n"
+                    "   v_color = a_color;\n"
                     "}\n";
 
     char fragmentShader[] =
             "#version 300 es\n"
                     "precision mediump float;\n"
+                    "in vec4 v_color;\n"
                     "out vec4 fragColor;\n"
                     "void main()\n"
                     "{\n"
-                    "   fragColor = vec4 ( 1.0, 0.0, 0.0, 1.0 );\n"
+//                    "   fragColor = vec4 ( 1.0, 0.0, 0.0, 1.0 );\n"
+                    "   fragColor = v_color;\n"
                     "}\n";
 
     userData->program = loadProgram(vertexShader, fragmentShader);
+
+//    // 使用assets文件夹下面的着色器程序创建program
+//    ANativeActivity* activity = esContext->activity;
+//    char* vertex = readAssetFile("triangleVertex.glsl", activity->assetManager);
+//    char* fragment = readAssetFile("triangleFragment.glsl", activity->assetManager);
+//    userData->program = loadProgram(vertex, fragment);
     if (userData->program == 0) {
         return FALSE;
     }
@@ -64,12 +75,17 @@ void onDraw(ESContext *esContext) {
 
     glUseProgram(userData->program);
 
-    GLint positionHandle = glGetAttribLocation(userData->program, "vPosition");
-    glEnableVertexAttribArray(positionHandle);
+    // 获取a_position位置句柄
+    GLint positionHandle = glGetAttribLocation(userData->program, "a_position");
     glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GL_FLOAT, GL_FALSE, vertexStride, vertices);
+    glEnableVertexAttribArray(positionHandle);
 
-    GLint colorHandle = glGetUniformLocation(userData->program, "fragColor");
-    glUniform4fv(colorHandle, 1, color);
+//    // 获取颜色句柄
+//    GLint colorHandle = glGetUniformLocation(userData->program, "a_color");
+//    glUniform4fv(colorHandle, 1, color);
+
+    // 使用glVertexAttrib4fv指定，不启用顶点属性数组，第一个参数指的是着色器语言中layout绑定的location的值
+    glVertexAttrib4fv(1, color);
 
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
 

@@ -42,6 +42,10 @@ static void handleCommand(struct android_app* androidApp, int32_t cmd) {
 
         // 关闭窗口
         case APP_CMD_TERM_WINDOW:
+//            if (esContext->accelerometerSensor != nullptr) {
+//                ASensorEventQueue_disableSensor(esContext->sensorEventQueue,
+//                                                esContext->accelerometerSensor);
+//            }
             //  如果定义了关闭窗口函数，则调用该函数处理
             if (esContext->shutdownFunc != nullptr) {
                 esContext->shutdownFunc(esContext);
@@ -77,6 +81,15 @@ static void handleCommand(struct android_app* androidApp, int32_t cmd) {
 
         // 获取焦点
         case APP_CMD_GAINED_FOCUS:
+//            if (esContext->accelerometerSensor != nullptr) {
+//                // 启用传感器
+//                ASensorEventQueue_enableSensor(esContext->sensorEventQueue,
+//                                               esContext->accelerometerSensor);
+//                // 设置获取事件的频率
+//                ASensorEventQueue_setEventRate(esContext->sensorEventQueue,
+//                                               esContext->accelerometerSensor,
+//                                               (1000L / 60) * 1000);
+//            }
             if (esContext->onWindowFocusChanged != nullptr) {
                 esContext->onWindowFocusChanged(esContext, true);
             }
@@ -84,6 +97,14 @@ static void handleCommand(struct android_app* androidApp, int32_t cmd) {
 
         // 失去焦点
         case APP_CMD_LOST_FOCUS:
+//            // 失去焦点时需要关闭加速度传感器
+//            if (esContext->accelerometerSensor != nullptr) {
+//                ASensorEventQueue_disableSensor(esContext->sensorEventQueue,
+//                                                esContext->accelerometerSensor);
+//            }
+            // 停止动画
+            esContext->animate = false;
+
             if (esContext->onWindowFocusChanged != nullptr) {
                 esContext->onWindowFocusChanged(esContext, false);
             }
@@ -120,7 +141,7 @@ static void handleCommand(struct android_app* androidApp, int32_t cmd) {
         // 保存APP的状态，对应onSaveInstanceState
         case APP_CMD_SAVE_STATE:
             if (esContext->onSavedInstance != nullptr) {
-                esContext->onSavedInstance(esContext);
+                esContext->onSavedInstance(esContext, androidApp);
             }
             break;
 
@@ -154,6 +175,32 @@ static void handleCommand(struct android_app* androidApp, int32_t cmd) {
 }
 
 /**
+ * 处理输出事件
+ * @param androidApp
+ * @param event
+ * @return
+ */
+static int32_t handleInput(struct android_app* app, AInputEvent* event) {
+    ESContext* esContext = (ESContext *)app->userData;
+    switch(AInputEvent_getType(event)) {
+        // 触摸事件
+        case AINPUT_EVENT_TYPE_MOTION:
+            if (esContext != nullptr && esContext->onTouchEvent != nullptr) {
+                return esContext->onTouchEvent(esContext, event);
+            }
+            break;
+
+        // 按键事件
+        case AINPUT_EVENT_TYPE_KEY:
+            if (esContext != nullptr && esContext->onKeyEvent != nullptr) {
+                return esContext->onKeyEvent(esContext, event);
+            }
+            break;
+    }
+    return 0;
+}
+
+/**
  * 胶水层暴露出来的app入口程序，相当于Activity中的onCreate方法
  * @param app
  */
@@ -161,23 +208,67 @@ void android_main(struct android_app* app) {
 
     ESContext esContext;
     float lastTime;
+    app_dummy();
     memset(&esContext, 0, sizeof(ESContext));
-    esContext.platformData = (void *)app->activity->assetManager;
+    esContext.activity = app->activity;
+    // 处理命令
     app->onAppCmd = handleCommand;
+    // 处理输入事件
+    app->onInputEvent = handleInput;
+    // 绑定用户数据
     app->userData = &esContext;
+    // 准备传感器管理器
+    esContext.sensorManager = ASensorManager_getInstance();
+    // 获得默认的加速度传感器
+    esContext.accelerometerSensor = ASensorManager_getDefaultSensor(esContext.sensorManager,
+                                                                    ASENSOR_TYPE_ACCELEROMETER);
+    // 准备传感器事件队列
+    esContext.sensorEventQueue = ASensorManager_createEventQueue(esContext.sensorManager,
+                                                                 app->looper, LOOPER_ID_USER,
+                                                                 nullptr, nullptr);
+    // 获取暂存状态数据
+    if (app->savedState != nullptr) {
+        esContext.savedState = app->savedState;
+    }
 
+    // 获取当前配置信息
+    if (app->config != nullptr) {
+        esContext.config = app->config;
+    }
+
+    // 获取当前时间
     lastTime = getCurrentTime();
 
     while (true) {
         int events;
+        int ident;
         struct  android_poll_source* source;
         // 如果消息队列中存在消息，则将消息取出来处理
-        while(ALooper_pollAll(0, nullptr, &events, (void**) &source) >= 0) {
+        while((ident = ALooper_pollAll(0, nullptr, &events, (void**) &source)) >= 0) {
             if (source != nullptr) {
                 source->process(app, source);
             }
-            // 如果请求推出app
+
+            //如果Looper ID是用户的ID，则可以使用监听传感器事件队列
+//            if (ident == LOOPER_ID_USER) {
+//                if (esContext.accelerometerSensor != nullptr) {
+//                    ASensorEvent event;
+//                    // 取出加速度传感器的值
+//                    while (ASensorEventQueue_getEvents(esContext.sensorEventQueue, &event, 1) > 0) {
+//                        ALOGI("accelometer: x= %f, y=%f, z=%f",
+//                              event.acceleration.x,
+//                              event.acceleration.y,
+//                              event.acceleration.z);
+//                    }
+//                }
+//            }
+
+            // 如果请求退出app
             if (app->destroyRequested != 0) {
+                // 推出应用时需要关掉EGL
+                if (esContext.shutdownFunc != nullptr) {
+                    esContext.shutdownFunc(&esContext);
+                }
                 return;
             }
         }
@@ -185,6 +276,11 @@ void android_main(struct android_app* app) {
         // 等待native window 的创建
         if (esContext.eglNativeWindow == nullptr) {
             continue;
+        }
+
+        // 是否允许动画
+        if (esContext.animate && esContext.onAnimate != nullptr) {
+            esContext.onAnimate(&esContext);
         }
 
         // app请求刷新函数不为空，则刷新数据

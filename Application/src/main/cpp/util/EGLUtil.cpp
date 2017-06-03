@@ -155,8 +155,41 @@ void registerUpdateFunc(ESContext *esContext, void(*updateFunc)(ESContext *, flo
     esContext->updateFunc = updateFunc;
 }
 
-void registerKeyFunc(ESContext *esContext, void(*keyFunc)(ESContext*, unsigned char, int, int)) {
-    esContext->keyFunc = keyFunc;
+
+
+/**
+ * 读取assets文件夹中的文件
+ * @param file assets目录下的文件名(包含路径)
+ * @param manager AssetManager管理器
+ * @return 返回字符串
+ */
+char* readAssetFile(const char* file, AAssetManager* manager) {
+    AAsset* asset = nullptr;
+    char* buffer = nullptr;
+    off_t size = -1;
+    if (!manager) {
+        ALOGE("AssetManager is null!");
+        return nullptr;
+    }
+    // 使用asset文件管理器打开文件
+    asset = AAssetManager_open(manager, file, AASSET_MODE_UNKNOWN);
+    // 获取文件的长度
+    size = AAsset_getLength(asset);
+    // 如果文件长度小于1，则表示文件为空，直接返回空字符串
+    if (size < 1) {
+        ALOGE("file is null!");
+        return nullptr;
+    }
+
+    // 分配内存，最后需要添加一个字符串结尾地址'\0', (C/C++中char数组与字符串的区别)
+    buffer = (char *) malloc(size + 1);
+    buffer[size] = '\0';
+
+    // 从文件中读取内容，完成后需要关闭文件
+    AAsset_read(asset, buffer, size);
+    AAsset_close(asset);
+    // 返回字符串
+    return buffer;
 }
 
 /**
@@ -254,14 +287,19 @@ GLuint loadShader(GLenum type, const char* shaderSrc) {
 
     if (!compiled) {
         GLint  infoLen = 0;
+        // 查询日志的长度判断是否有日志产生
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLen);
 
         if (infoLen > 1) {
+            // 分配一个足以存储日志信息的字符串
             char* infoLog = (char *) malloc(sizeof(char) * infoLen);
+            // 检索日志信息
             glGetShaderInfoLog(shader, infoLen, nullptr, infoLog);
             ALOGE("Error compiling shader:\n%s\n", infoLog);
+            // 使用完成后需要释放字符串分配的内存
             free(infoLog);
         }
+        // 删除编译出错的着色器释放内存
         glDeleteShader(shader);
         return 0;
     }
@@ -274,11 +312,12 @@ GLuint loadProgram(const char* vertexShader, const char* fragShader) {
     GLuint program;
     GLint linked;
 
-    //加载shader
+    //加载顶点shader
     vertex = loadShader(GL_VERTEX_SHADER, vertexShader);
     if (vertex == 0) {
         return 0;
     }
+    // 加载片元着色器
     fragment = loadShader(GL_FRAGMENT_SHADER, fragShader);
     if (fragment == 0) {
         glDeleteShader(vertex);
@@ -301,25 +340,75 @@ GLuint loadProgram(const char* vertexShader, const char* fragShader) {
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
     if (!linked) {
         GLint infoLen = 0;
+        // 检查日志信息长度
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLen);
         if (infoLen > 1) {
+            // 分配一个足以存储日志信息的字符串
             char* infoLog = (char *) malloc(sizeof(char) * infoLen);
+            // 检索日志信息
             glGetProgramInfoLog(program, infoLen, nullptr, infoLog);
             ALOGE("Error linking program:\n%s\n", infoLog);
+            // 使用完成后需要释放字符串分配的内存
             free(infoLog);
         }
+        // 删除着色器释放内存
         glDeleteShader(vertex);
         glDeleteShader(fragment);
         glDeleteProgram(program);
         return 0;
     }
-
+    // 删除着色器释放内存
     glDeleteShader(vertex);
     glDeleteShader(fragment);
 
     return program;
 }
 
+
+/**
+ * 查询活动的统一变量uniform
+ * @param program
+ */
+void checkActiveUniform(const GLuint program) {
+    GLint maxLen;
+    GLint numUniforms;
+    char* uniformName;
+
+    glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &numUniforms);
+    glGetProgramiv(program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &maxLen);
+
+    uniformName = (char *)malloc(sizeof(char) * maxLen);
+
+    for (int i = 0; i < numUniforms; ++i) {
+        GLint size;
+        GLenum type;
+        GLint location;
+
+        glGetActiveUniform(program, i, maxLen, nullptr, &size, &type, uniformName);
+
+        location = glGetUniformLocation(program, uniformName);
+
+        ALOGD("location:", location);
+
+        switch (type) {
+            case GL_FLOAT:
+                ALOGD("type : GL_FLOAT");
+                break;
+            case GL_FLOAT_VEC2:
+                ALOGD("type : GL_FLOAT_VEC2");
+                break;
+            case GL_FLOAT_VEC3:
+                ALOGD("type : GL_FLOAT_VEC3");
+                break;
+            case GL_FLOAT_VEC4:
+                ALOGD("type : GL_FLOAT_VEC4");
+                break;
+            case GL_INT:
+                ALOGD("type : GL_INT");
+                break;
+        }
+    }
+}
 
 /**
  * 缩放
