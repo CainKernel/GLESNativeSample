@@ -142,7 +142,7 @@ struct ESContext {
 GLboolean createWindow(ESContext* esContext, const char* title,
                        GLint width, GLint height, GLuint flags);
 /// 注册回调函数
-void registerDrawFunc(ESContext *esContext, void (*drawFunc)(ESContext *));
+void registerDrawFunc(ESContext *esContext, void (drawFunc)(ESContext *));
 
 void registerShutdownFunc(ESContext *esContext, void (*shutdownFunc)(ESContext *));
 
@@ -269,6 +269,20 @@ void matrixMultiply(ESMatrix* result, ESMatrix* srcA, ESMatrix* srcB);
  * @param result
  */
 void matrixLoadIdentity(ESMatrix* result);
+
+/**
+ * 创建球面
+ * @param numSlices
+ * @param radius
+ * @param vertices
+ * @param normals
+ * @param texCoords
+ * @param indices
+ * @return
+ */
+int sphere(int numSlices, float radius,
+           GLfloat **vertices, GLfloat **normals, GLfloat **texCoords, GLuint **indices);
+
 
 
 

@@ -28,7 +28,12 @@ add_library( # Sets the name of the library.
              src/main/cpp/util/AndroidUtil.cpp
 
              # OpenGLES source
-             src/main/cpp/gles/EGLTriangle.cpp )
+             # src/main/cpp/gles/EGLTriangle.cpp
+             # src/main/cpp/gles/EGLMipMap2D.cpp
+             # src/main/cpp/gles/EGLTextureWrap.cpp
+             # src/main/cpp/gles/EGLTexture2D.cpp
+             src/main/cpp/gles/EGLTextureCube.cpp
+             )
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
