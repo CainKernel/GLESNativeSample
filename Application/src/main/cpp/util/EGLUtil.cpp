@@ -10,21 +10,29 @@
 
 #define PI 3.1415926535897932384626433832795f
 
+// #pragma pack指定内存对齐方式
+#pragma pack(push,x1)
+// 这里表示按照1字节对齐方式对齐
+#pragma pack(1)
+// TGA图片格式，RLE算法
 typedef struct {
-    unsigned char  IdSize,
-            MapType,
-            ImageType;
-    unsigned short PaletteStart,
-            PaletteSize;
-    unsigned char  PaletteEntryDepth;
-    unsigned short X,
-            Y,
-            Width,
-            Height;
-    unsigned char  ColorDepth,
-            Descriptor;
+    unsigned char  IdSize, // 图像信息字段长度， 范围 0 ~ 255， 0表示没有图像的信息字段
+            MapType,        // 颜色表类型，0表示没有颜色。
+            ImageType;      // 图像类型码，2表示非压缩格式，10表示压缩RGB格式，后面的图像数据采用RLE压缩
+
+    unsigned short PaletteStart,    // 颜色表首地址，颜色表头的入口，整形(低位 —— 高位)
+            PaletteSize;            // 颜色表的长度，整形（低位 —— 高位）
+    unsigned char  PaletteEntryDepth;   // 颜色表的位数，16表示16位TGA，24表示24位TGA，32表示32位TGA
+
+    unsigned short X,   // 图像X坐标起始位置，左下角的X坐标
+            Y,          // 图像Y坐标起始位置，左下角的Y坐标
+            Width,      // 图像的宽度
+            Height;     // 图像的高度
+    unsigned char  ColorDepth,  // 图像没像素存储占用位数
+            Descriptor;         // 图像描述符字节
 
 } TGA_HEADER;
+#pragma pack(pop,x1)
 
 /**
  * 查询可渲染版本类型
@@ -254,6 +262,7 @@ char* loadTGA(void* context, const char *fileName, int *width, int *height) {
     bytes = fileRead(file, sizeof(TGA_HEADER), &header);
     *width = header.Width;
     *height = header.Height;
+    //
     if (header.ColorDepth == 8 || header.ColorDepth == 24 || header.ColorDepth == 32) {
         int bytesToRead = sizeof(char) * (*width) * (*height) * header.ColorDepth / 8;
 
