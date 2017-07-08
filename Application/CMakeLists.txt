@@ -34,7 +34,8 @@ add_library( # Sets the name of the library.
              # src/main/cpp/gles/EGLTexture2D.cpp
              # src/main/cpp/gles/EGLTextureCube.cpp
              # src/main/cpp/gles/EGLMultiTexture.cpp
-             src/main/cpp/gles/EGLLinearFog.cpp
+             # src/main/cpp/gles/EGLLinearFog.cpp
+             src/main/cpp/gles/EGLParticleSystem.cpp
              )
 
 # Searches for a specified prebuilt library and stores the path as a
